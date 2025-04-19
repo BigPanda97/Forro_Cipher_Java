@@ -311,8 +311,8 @@ public final class ForroCipher {
         byte[] ciphertext = new byte[plaintext.length];
         byte[] recovered  = new byte[plaintext.length];
 
-        new ForroByVo3d(key, iv).encrypt(plaintext, 0, ciphertext, 0, plaintext.length);
-        new ForroByVo3d(key, iv).decrypt(ciphertext, 0, recovered, 0, recovered.length);
+        new ForroCipher(key, iv).encrypt(plaintext, 0, ciphertext, 0, plaintext.length);
+        new ForroCipher(key, iv).decrypt(ciphertext, 0, recovered, 0, recovered.length);
 
         System.out.println("Forro plaintext  : " + toHex(plaintext));
         System.out.println("Forro ciphertext : " + toHex(ciphertext));
@@ -334,7 +334,7 @@ public final class ForroCipher {
         System.out.println("XForro Ciphertext: " + toHex(cipher));
         System.out.println("XForro Recovered : " + new String(plain));
     }
-
+    
     public static void main(String[] args) {
         System.out.println(selfTest() ? "[Forro] Self-check OKAY" : "[Forro] Self-check FAILED");
         forroDemo();
