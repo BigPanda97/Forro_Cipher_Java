@@ -1,38 +1,67 @@
 /**
  * Self-contained (no imports) implementation of the Forró stream cipher **and**
- * its extended-nonce variant ("XForro") powered by *HForro* key derivation.
+ * its extended-nonce variant ("XForró") powered by *HForró* key derivation.
  * <p>
  * The constructor now accepts either an 8-byte IV (classic Forró) or a 24-byte
  * IV (XForró):
  * <pre>
  *   // Classic 64-bit nonce
- *   new ForroCipherStandalone(key32, iv8);
+ *   new ForroCipher(key32, iv8);
  *
- *   // Extended 192-bit nonce = 16-byte HForro nonce ‖ 8-byte stream nonce
- *   new ForroCipherStandalone(key32, iv24);
+ *   // Extended 192-bit nonce = 16-byte HForró nonce ‖ 8-byte stream nonce
+ *   new ForroCipher(key32, iv24);
  * </pre>
  * Length is detected automatically; everything else stays API-compatible.
  * <p>
  * *Built-in self-test* now includes:
  * <ul>
  *   <li>Official 128-byte keystream vectors from <code>test_ref.c</code></li>
- *   <li>The HForro KDF vector from the <em>HForro.NET</em> test-suite</li>
+ *   <li>The HForró KDF vector from the <em>HForro.NET</em></li>
  * </ul>
  */
 public final class ForroCipher {
 
     /* =========  Constants  ========= */
 
-    private static final int ROUNDS = 7; // number of double rounds
+    private static int DOUBLE_ROUNDS = 7; // number of double rounds
 
     /** ASCII bytes of "voltadaasabranca" (little-end encoded) */
     private static final byte[] SIGMA = {'v','o','l','t','a','d','a','a','s','a','b','r','a','n','c','a'};
 
-    // ===== HForro sizes =====
+    // ===== HForró sizes =====
     private static final int HF_OUT = 32;
     private static final int HF_NONCE = 16;
 
-    private final int[] state = new int[16]; // internal 512-bit state (16×32-bit words)
+    private int[] state = new int[16]; // internal 512-bit state (16×32-bit words)
+    
+    /* Reset method */
+	public void resetState() {
+		state = new int[16];
+	}
+    
+    public String getCipherName() {
+    	return "Forró";
+    }
+    
+    public String getCipherNameWithRounds() {
+    	return "Forró" + DOUBLE_ROUNDS*2;
+    }
+    
+    public int getCipherRounds() {
+    	return DOUBLE_ROUNDS*2;
+    }
+    
+    public int getDefaultCipherRounds() {
+    	return 7*2;
+    }
+    
+    public void resetRounds() {
+    	DOUBLE_ROUNDS = 7;
+    }
+    
+    public void setCipherDoubleRounds(int doubleRounds) {
+    	DOUBLE_ROUNDS = doubleRounds;
+    }
 
     /* =========  Construction ========= */
 
@@ -40,23 +69,23 @@ public final class ForroCipher {
      * Creates a Forró or XForró cipher depending on <code>iv</code> length:
      * <ul>
      *   <li>8  bytes → classic Forró</li>
-     *   <li>24 bytes → XForró (HForro(key, iv[0..15]) derives sub-key; iv[16..23]
+     *   <li>24 bytes → XForró (HForró(key, iv[0..15]) derives sub-key; iv[16..23]
      *       becomes the actual stream nonce)</li>
      * </ul>
      * @throws IllegalArgumentException if key ≠ 32 bytes or iv ≠ 8/24 bytes.
      */
     public ForroCipher(byte[] key, byte[] iv) {
         if (key == null || key.length != 32)
-            throw new IllegalArgumentException("Key must be 32 bytes (256-bit)");
+            throw new IllegalArgumentException("Key must be 256 bit / 32 bytes");
         if (iv == null || (iv.length != 8 && iv.length != 24))
-            throw new IllegalArgumentException("IV must be 8 (Forro) or 24 (XForro) bytes");
+            throw new IllegalArgumentException("IV must be 64 bit / 8 bytes (Forró) or 192 bit / 24 bytes (XForró)");
 
         if (iv.length == 8) {
             // Classic Forró
             keySetup(key);
             ivSetup(iv);
         } else {
-            // XForró = HForro-derived key ‖ tail-IV
+            // XForró = HForró-derived key ‖ tail-IV
             byte[] derivedKey = new byte[HF_OUT];
             hforroDeriveKey(derivedKey, key, iv);         // iv holds 24 bytes
             keySetup(derivedKey);
@@ -106,7 +135,7 @@ public final class ForroCipher {
     private void core(byte[] output) {
         int[] v = new int[16];
         for (int i = 0; i < 16; i++) v[i] = state[i];
-        for (int i = 0; i < ROUNDS; i++) {
+        for (int i = 0; i < DOUBLE_ROUNDS; i++) {
             Q(v, 0, 4, 8, 12, 3);
             Q(v, 1, 5, 9, 13, 0);
             Q(v, 2, 6, 10, 14, 1);
@@ -119,10 +148,10 @@ public final class ForroCipher {
         for (int i = 0; i < 16; i++) intToLE(v[i] + state[i], output, 4 * i);
     }
 
-    /* =========  HForro (32-byte sub-key KDF) ========= */
+    /* =========  HForró (32-byte sub-key KDF) ========= */
 
     private static void hforroDeriveKey(byte[] outKey, byte[] key, byte[] iv24) {
-        // iv24 = 24-byte (16-byte HForro nonce ‖ 8-byte stream nonce)
+        // iv24 = 24-byte (16-byte HForró nonce ‖ 8-byte stream nonce)
         byte[] nonce = new byte[HF_NONCE];
         for (int i = 0; i < HF_NONCE; i++) nonce[i] = iv24[i];
 
@@ -144,7 +173,7 @@ public final class ForroCipher {
         v[14] = 0x72626173; // "sabr"
         v[15] = 0x61636e61; // "anca"
 
-        for (int i = 0; i < ROUNDS; i++) {
+        for (int i = 0; i < DOUBLE_ROUNDS; i++) {
             Q(v, 0, 4, 8, 12, 3);
             Q(v, 1, 5, 9, 13, 0);
             Q(v, 2, 6, 10, 14, 1);
@@ -183,7 +212,9 @@ public final class ForroCipher {
         v[a] = rotl(v[a], 8);
     }
 
-    private static int rotl(int x, int n) { return (x << n) | (x >>> (32 - n)); }
+	private static int rotl(int x, int n) {
+		return (x << n) | (x >>> (32 - n));
+	}
 
     /* =========  Key/IV setup for classic Forró ========= */
 
@@ -210,23 +241,21 @@ public final class ForroCipher {
 
     /* =========  Little-endian helpers ========= */
 
-    private static int le32(byte[] b, int off) {
-        return (b[off] & 0xFF)       |
-               ((b[off + 1] & 0xFF) << 8)  |
-               ((b[off + 2] & 0xFF) << 16) |
-               ((b[off + 3] & 0xFF) << 24);
-    }
-    private static void intToLE(int v, byte[] b, int off) {
-        b[off]     = (byte) v;
-        b[off + 1] = (byte) (v >>> 8);
-        b[off + 2] = (byte) (v >>> 16);
-        b[off + 3] = (byte) (v >>> 24);
-    }
+	private static int le32(byte[] b, int off) {
+		return (b[off] & 0xFF) | ((b[off + 1] & 0xFF) << 8) | ((b[off + 2] & 0xFF) << 16) | ((b[off + 3] & 0xFF) << 24);
+	}
+	
+	private static void intToLE(int v, byte[] b, int off) {
+		b[off] = (byte) v;
+		b[off + 1] = (byte) (v >>> 8);
+		b[off + 2] = (byte) (v >>> 16);
+		b[off + 3] = (byte) (v >>> 24);
+	}
 
-    private static void checkBounds(byte[] a, int off, int len) {
-        if (off < 0 || len < 0 || off + len > a.length)
-            throw new ArrayIndexOutOfBoundsException();
-    }
+	private static void checkBounds(byte[] a, int off, int len) {
+		if (off < 0 || len < 0 || off + len > a.length)
+			throw new ArrayIndexOutOfBoundsException();
+	}
 
     /* =========  Hex helpers (for demo & tests) ========= */
 
@@ -253,7 +282,7 @@ public final class ForroCipher {
         boolean ok = true;
         // --- Classic Forró vectors (128-byte keystreams) ---
         ok &= forroVectors();
-        // --- HForro KDF vector from HForro.NET ---
+        // --- HForró KDF vector from HForró.NET ---
         ok &= hforroVector();
         return ok;
     }
@@ -283,8 +312,6 @@ public final class ForroCipher {
 
     private static boolean hforroVector() {
         byte[] expected = hexToBytes("9754128339bd105377908eb53d7f238e7b3732cc48383052d35fd94c943db866");
-//      byte[] key = new byte[32];
-//      for (int i = 0; i < 32; i++) key[i] = (byte) i; // 00..1f
         byte[] key = hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"); // 32-byte
         byte[] nonce = hexToBytes("000000090000004a0000000031415927"); // 16-byte
         byte[] okm = new byte[HF_OUT];
@@ -294,6 +321,8 @@ public final class ForroCipher {
         // last 8 bytes irrelevant here
         new ForroCipher(key, iv24); // just to make sure ctor doesn't throw
         hforroDeriveKey(okm, key, iv24);
+        // System.out.println("HForró           : " + toHex(okm));
+        // System.out.println("HForró-Expected  : " + toHex(expected));
         for (int i = 0; i < HF_OUT; i++) if (okm[i] != expected[i]) return false;
         return true;
     }
@@ -301,44 +330,43 @@ public final class ForroCipher {
     /* =========  CLI demo ========= */
     
     private static void forroDemo() {
-    	// Extra mini-demo: encrypt & decrypt "Hello Forro!"
+    	// Extra mini-demo: encrypt & decrypt "Hello Forró!"
         byte[] key = new byte[32];
         byte[] iv  = new byte[8];
         for (int i = 0; i < 32; i++) key[i] = (byte) i;
         for (int i = 0; i < 8;  i++) iv[i]  = (byte) i;
 
-        byte[] plaintext  = "Hello Forro!".getBytes();
+        byte[] plaintext  = "Hello Forró!".getBytes();
         byte[] ciphertext = new byte[plaintext.length];
         byte[] recovered  = new byte[plaintext.length];
 
         new ForroCipher(key, iv).encrypt(plaintext, 0, ciphertext, 0, plaintext.length);
         new ForroCipher(key, iv).decrypt(ciphertext, 0, recovered, 0, recovered.length);
 
-        System.out.println("Forro plaintext  : " + toHex(plaintext));
-        System.out.println("Forro ciphertext : " + toHex(ciphertext));
-        System.out.println("Forro recovered  : " + new String(recovered));
+        System.out.println("Forró plaintext  : " + toHex(plaintext));
+        System.out.println("Forró ciphertext : " + toHex(ciphertext));
+        System.out.println("Forró recovered  : " + new String(recovered));
     }
     
     private static void xForroDemo() {
-    	// Quick XForró demo: 24-byte nonce, encrypt & decrypt "Hello XForro!"
+    	// Quick XForró demo: 24-byte nonce, encrypt & decrypt "Hello XForró!"
         byte[] key = new byte[32];
         byte[] iv  = new byte[24];
         for (int i = 0; i < 32; i++) key[i] = (byte) i;
         for (int i = 0; i < 24; i++) iv[i]  = (byte) (i * 3); // arbitrary
-        byte[] msg = "Hello XForro!".getBytes();
+        byte[] msg = "Hello XForró!".getBytes();
         byte[] cipher = new byte[msg.length];
         new ForroCipher(key, iv).encrypt(msg, 0, cipher, 0, msg.length);
         byte[] plain = new byte[msg.length];
         new ForroCipher(key, iv).decrypt(cipher, 0, plain, 0, msg.length);
-        System.out.println("XForro plaintext : " + toHex(msg));
-        System.out.println("XForro Ciphertext: " + toHex(cipher));
-        System.out.println("XForro Recovered : " + new String(plain));
+        System.out.println("XForró plaintext : " + toHex(msg));
+        System.out.println("XForró Ciphertext: " + toHex(cipher));
+        System.out.println("XForró Recovered : " + new String(plain));
     }
-    
+
     public static void main(String[] args) {
-        System.out.println(selfTest() ? "[Forro] Self-check OKAY" : "[Forro] Self-check FAILED");
+        System.out.println(selfTest() ? "[Forró] Self-check OKAY" : "[Forró] Self-check FAILED");
         forroDemo();
         xForroDemo();
     }
-    
 }
