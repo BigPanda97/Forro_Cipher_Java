@@ -35,9 +35,9 @@ public final class ForroCipher {
     private int[] state = new int[16]; // internal 512-bit state (16×32-bit words)
     
     /* Reset method */
-	public void resetState() {
-		state = new int[16];
-	}
+    public void resetState() {
+	state = new int[16];
+    }
     
     public String getCipherName() {
     	return "Forró";
